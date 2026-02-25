@@ -79,11 +79,6 @@ type Model struct {
 	statusIsErr  bool
 	windowWidth  int
 	windowHeight int
-	// move mode state
-	movingItem bool
-	moveCursor int       // tracks current position of the item being moved
-	moveFrom   int       // original position, used to restore cursor on cancel
-	savedItems []list.Item // snapshot for cancel
 }
 
 func New(client *spotify.Client, ctx context.Context) Model {
@@ -243,24 +238,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case viewQueue:
-		if m.movingItem {
-			return m.handleMoveKey(msg)
-		}
 		switch {
 		case msg.String() == "q":
 			return m, tea.Quit
-		case msg.String() == "m":
-			if len(m.queueList.Items()) == 0 {
-				return m, nil
-			}
-			idx := m.queueList.Index()
-			m.movingItem = true
-			m.moveCursor = idx
-			m.moveFrom = idx
-			orig := m.queueList.Items()
-			m.savedItems = make([]list.Item, len(orig))
-			copy(m.savedItems, orig)
-			return m, nil
 		case msg.String() == "r":
 			m.status = "Refreshing…"
 			m.statusIsErr = false
@@ -277,43 +257,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.queueList, cmd = m.queueList.Update(msg)
 			return m, cmd
 		}
-	}
-
-	return m, nil
-}
-
-func (m Model) handleMoveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	items := m.queueList.Items()
-	i := m.moveCursor
-
-	switch msg.Type {
-	case tea.KeyUp:
-		if i > 0 {
-			items[i], items[i-1] = items[i-1], items[i]
-			m.moveCursor--
-			cmd := m.queueList.SetItems(items)
-			m.queueList.Select(m.moveCursor)
-			return m, cmd
-		}
-	case tea.KeyDown:
-		if i < len(items)-1 {
-			items[i], items[i+1] = items[i+1], items[i]
-			m.moveCursor++
-			cmd := m.queueList.SetItems(items)
-			m.queueList.Select(m.moveCursor)
-			return m, cmd
-		}
-	case tea.KeyEnter:
-		m.movingItem = false
-		m.status = ""
-		m.statusIsErr = false
-	case tea.KeyEsc:
-		m.movingItem = false
-		cmd := m.queueList.SetItems(m.savedItems)
-		m.queueList.Select(m.moveFrom)
-		m.status = "Move cancelled"
-		m.statusIsErr = false
-		return m, cmd
 	}
 
 	return m, nil
@@ -368,10 +311,7 @@ func (m Model) helpText() string {
 	case viewResults:
 		return "enter: add to queue  •  /: search  •  tab: queue  •  q: quit"
 	case viewQueue:
-		if m.movingItem {
-			return "↑↓: reorder  •  enter: confirm  •  esc: cancel"
-		}
-		return "r: refresh  •  m: move  •  tab/esc: back  •  q: quit"
+		return "r: refresh  •  tab/esc: back  •  q: quit"
 	}
 	return ""
 }
