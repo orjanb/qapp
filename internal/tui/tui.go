@@ -55,6 +55,10 @@ type addedToQueueMsg struct {
 	err   error
 }
 
+type skippedToNextMsg struct {
+	err error
+}
+
 // ── styling ──────────────────────────────────────────────────────────────────
 
 var (
@@ -177,6 +181,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusIsErr = false
 		return m, nil
 
+	case skippedToNextMsg:
+		if msg.err != nil {
+			m.status = msg.err.Error()
+			m.statusIsErr = true
+			return m, nil
+		}
+		m.status = "Skipped"
+		m.statusIsErr = false
+		return m, doLoadQueue(m.client, m.ctx)
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -241,6 +255,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case msg.String() == "q":
 			return m, tea.Quit
+		case msg.String() == "n":
+			m.status = "Skipping…"
+			m.statusIsErr = false
+			return m, doSkipToNext(m.client, m.ctx)
 		case msg.String() == "r":
 			m.status = "Refreshing…"
 			m.statusIsErr = false
@@ -311,7 +329,7 @@ func (m Model) helpText() string {
 	case viewResults:
 		return "enter: add to queue  •  /: search  •  tab: queue  •  q: quit"
 	case viewQueue:
-		return "r: refresh  •  tab/esc: back  •  q: quit"
+		return "n: skip  •  r: refresh  •  tab/esc: back  •  q: quit"
 	}
 	return ""
 }
@@ -336,5 +354,12 @@ func doAddToQueue(client *spotify.Client, ctx context.Context, track spotify.Tra
 	return func() tea.Msg {
 		err := client.AddToQueue(ctx, track.URI)
 		return addedToQueueMsg{track: track, err: err}
+	}
+}
+
+func doSkipToNext(client *spotify.Client, ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		err := client.SkipToNext(ctx)
+		return skippedToNextMsg{err: err}
 	}
 }

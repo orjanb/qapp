@@ -1,6 +1,9 @@
 package spotify
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type QueueResponse struct {
 	CurrentlyPlaying *Track  `json:"currently_playing"`
@@ -18,6 +21,18 @@ func (c *Client) GetQueue(ctx context.Context) (*QueueResponse, error) {
 type CurrentlyPlayingResponse struct {
 	IsPlaying bool   `json:"is_playing"`
 	Item      *Track `json:"item"`
+}
+
+func (c *Client) SkipToNext(ctx context.Context) error {
+	resp, err := c.postEmpty(ctx, "/me/player/next")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 204 {
+		return fmt.Errorf("spotify API error: %s", resp.Status)
+	}
+	return nil
 }
 
 // GetCurrentlyPlaying returns what's playing now, or nil if nothing is playing.
