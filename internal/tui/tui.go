@@ -59,6 +59,11 @@ type skippedToNextMsg struct {
 	err error
 }
 
+type nowPlayingMsg struct {
+	resp *spotify.CurrentlyPlayingResponse
+	err  error
+}
+
 // ── styling ──────────────────────────────────────────────────────────────────
 
 var (
@@ -83,6 +88,7 @@ type Model struct {
 	statusIsErr  bool
 	windowWidth  int
 	windowHeight int
+	nowPlaying   *spotify.CurrentlyPlayingResponse
 }
 
 func New(client *spotify.Client, ctx context.Context) Model {
@@ -117,7 +123,7 @@ func New(client *spotify.Client, ctx context.Context) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, doLoadNowPlaying(m.client, m.ctx))
 }
 
 // ── update ───────────────────────────────────────────────────────────────────
@@ -189,7 +195,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.status = "Skipped"
 		m.statusIsErr = false
-		return m, doLoadQueue(m.client, m.ctx)
+		return m, tea.Batch(doLoadQueue(m.client, m.ctx), doLoadNowPlaying(m.client, m.ctx))
+
+	case nowPlayingMsg:
+		if msg.err == nil {
+			m.nowPlaying = msg.resp
+		}
+		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -238,7 +250,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case msg.String() == "/" || msg.Type == tea.KeyEsc:
 			m.currentView = viewSearch
 			m.input.Focus()
-			return m, textinput.Blink
+			return m, tea.Batch(textinput.Blink, doLoadNowPlaying(m.client, m.ctx))
 		case msg.Type == tea.KeyTab:
 			m.prevView = viewResults
 			m.currentView = viewQueue
@@ -267,7 +279,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.currentView = m.prevView
 			if m.prevView == viewSearch {
 				m.input.Focus()
-				return m, textinput.Blink
+				return m, tea.Batch(textinput.Blink, doLoadNowPlaying(m.client, m.ctx))
 			}
 			return m, nil
 		default:
@@ -278,6 +290,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// ── now playing ──────────────────────────────────────────────────────────────
+
+func (m Model) nowPlayingView() string {
+	if m.nowPlaying == nil {
+		return helpStyle.Render("  Nothing playing")
+	}
+	symbol := "⏸"
+	if m.nowPlaying.IsPlaying {
+		symbol = "▶"
+	}
+	line1 := titleStyle.Render(symbol+"  "+m.nowPlaying.Item.Name)
+	line2 := helpStyle.Render("   " + spotify.ArtistNames(*m.nowPlaying.Item) + " · " + m.nowPlaying.Item.Album.Name)
+	return line1 + "\n" + line2
 }
 
 // ── view ─────────────────────────────────────────────────────────────────────
@@ -294,7 +321,7 @@ func (m Model) View() string {
 
 	switch m.currentView {
 	case viewSearch:
-		body = "\n  " + m.input.View()
+		body = "\n" + m.nowPlayingView() + "\n\n  " + m.input.View()
 	case viewResults:
 		body = m.resultsList.View()
 	case viewQueue:
@@ -361,5 +388,12 @@ func doSkipToNext(client *spotify.Client, ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		err := client.SkipToNext(ctx)
 		return skippedToNextMsg{err: err}
+	}
+}
+
+func doLoadNowPlaying(client *spotify.Client, ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.GetCurrentlyPlaying(ctx)
+		return nowPlayingMsg{resp: resp, err: err}
 	}
 }
