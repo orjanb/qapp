@@ -24,8 +24,8 @@ const (
 // ── list items ───────────────────────────────────────────────────────────────
 
 type trackItem struct {
-	track    spotify.Track
-	prefix   string
+	track  spotify.Track
+	prefix string
 }
 
 func (t trackItem) Title() string {
@@ -58,11 +58,11 @@ type addedToQueueMsg struct {
 // ── styling ──────────────────────────────────────────────────────────────────
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#1DB954"))
-	statusOK    = lipgloss.NewStyle().Foreground(lipgloss.Color("#1DB954"))
-	statusErr   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
-	helpStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
-	appStyle    = lipgloss.NewStyle().Padding(0, 1)
+	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#1DB954"))
+	statusOK   = lipgloss.NewStyle().Foreground(lipgloss.Color("#1DB954"))
+	statusErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+	helpStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+	appStyle   = lipgloss.NewStyle().Padding(0, 1)
 )
 
 // ── model ────────────────────────────────────────────────────────────────────
@@ -79,6 +79,11 @@ type Model struct {
 	statusIsErr  bool
 	windowWidth  int
 	windowHeight int
+	// move mode state
+	movingItem bool
+	moveCursor int       // tracks current position of the item being moved
+	moveFrom   int       // original position, used to restore cursor on cancel
+	savedItems []list.Item // snapshot for cancel
 }
 
 func New(client *spotify.Client, ctx context.Context) Model {
@@ -94,11 +99,13 @@ func New(client *spotify.Client, ctx context.Context) Model {
 	rl.Title = "Results"
 	rl.SetShowStatusBar(false)
 	rl.SetFilteringEnabled(false)
+	rl.DisableQuitKeybindings()
 
 	ql := list.New([]list.Item{}, delegate, 0, 0)
 	ql.Title = "Queue"
 	ql.SetShowStatusBar(false)
 	ql.SetFilteringEnabled(false)
+	ql.DisableQuitKeybindings()
 
 	return Model{
 		client:      client,
@@ -187,8 +194,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case viewSearch:
 		switch msg.Type {
-		case tea.KeyCtrlC:
-			return m, tea.Quit
 		case tea.KeyEnter:
 			query := m.input.Value()
 			if query == "" {
@@ -211,7 +216,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case viewResults:
 		switch {
-		case msg.Type == tea.KeyCtrlC || msg.String() == "q":
+		case msg.String() == "q":
 			return m, tea.Quit
 		case msg.Type == tea.KeyEnter:
 			selected, ok := m.resultsList.SelectedItem().(trackItem)
@@ -238,9 +243,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case viewQueue:
+		if m.movingItem {
+			return m.handleMoveKey(msg)
+		}
 		switch {
-		case msg.Type == tea.KeyCtrlC || msg.String() == "q":
+		case msg.String() == "q":
 			return m, tea.Quit
+		case msg.String() == "m":
+			if len(m.queueList.Items()) == 0 {
+				return m, nil
+			}
+			idx := m.queueList.Index()
+			m.movingItem = true
+			m.moveCursor = idx
+			m.moveFrom = idx
+			orig := m.queueList.Items()
+			m.savedItems = make([]list.Item, len(orig))
+			copy(m.savedItems, orig)
+			return m, nil
 		case msg.String() == "r":
 			m.status = "Refreshing…"
 			m.statusIsErr = false
@@ -257,6 +277,43 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.queueList, cmd = m.queueList.Update(msg)
 			return m, cmd
 		}
+	}
+
+	return m, nil
+}
+
+func (m Model) handleMoveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	items := m.queueList.Items()
+	i := m.moveCursor
+
+	switch msg.Type {
+	case tea.KeyUp:
+		if i > 0 {
+			items[i], items[i-1] = items[i-1], items[i]
+			m.moveCursor--
+			cmd := m.queueList.SetItems(items)
+			m.queueList.Select(m.moveCursor)
+			return m, cmd
+		}
+	case tea.KeyDown:
+		if i < len(items)-1 {
+			items[i], items[i+1] = items[i+1], items[i]
+			m.moveCursor++
+			cmd := m.queueList.SetItems(items)
+			m.queueList.Select(m.moveCursor)
+			return m, cmd
+		}
+	case tea.KeyEnter:
+		m.movingItem = false
+		m.status = ""
+		m.statusIsErr = false
+	case tea.KeyEsc:
+		m.movingItem = false
+		cmd := m.queueList.SetItems(m.savedItems)
+		m.queueList.Select(m.moveFrom)
+		m.status = "Move cancelled"
+		m.statusIsErr = false
+		return m, cmd
 	}
 
 	return m, nil
@@ -307,11 +364,14 @@ func (m Model) View() string {
 func (m Model) helpText() string {
 	switch m.currentView {
 	case viewSearch:
-		return "enter: search  •  tab: queue  •  ctrl+c: quit"
+		return "enter: search  •  tab: queue"
 	case viewResults:
 		return "enter: add to queue  •  /: search  •  tab: queue  •  q: quit"
 	case viewQueue:
-		return "r: refresh  •  tab/esc: back  •  q: quit"
+		if m.movingItem {
+			return "↑↓: reorder  •  enter: confirm  •  esc: cancel"
+		}
+		return "r: refresh  •  m: move  •  tab/esc: back  •  q: quit"
 	}
 	return ""
 }
