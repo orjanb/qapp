@@ -60,7 +60,7 @@ func initClient(ctx context.Context) error {
 	token, err := auth.LoadToken()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("not authenticated — run `spotify auth` first")
+			return fmt.Errorf("not authenticated — run `spotify auth` first (see https://developer.spotify.com/documentation/web-api/concepts/apps)")
 		}
 		return fmt.Errorf("loading token: %w", err)
 	}
