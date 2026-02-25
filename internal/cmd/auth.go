@@ -10,14 +10,13 @@ import (
 )
 
 var authCmd = &cobra.Command{
-	Use:   "auth",
+	Use:   "auth [client-id]",
 	Short: "Authenticate with Spotify via browser",
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		clientID, _ := cmd.Flags().GetString("client-id")
-
 		var cfg *config.Config
-		if clientID != "" {
-			cfg = &config.Config{ClientID: clientID}
+		if len(args) == 1 {
+			cfg = &config.Config{ClientID: args[0]}
 			if err := config.Save(cfg); err != nil {
 				return fmt.Errorf("saving config: %w", err)
 			}
@@ -67,8 +66,4 @@ var authCmd = &cobra.Command{
 		fmt.Println("Authentication successful! Token saved.")
 		return nil
 	},
-}
-
-func init() {
-	authCmd.Flags().String("client-id", "", "Spotify app client ID (only needed on first run)")
 }
