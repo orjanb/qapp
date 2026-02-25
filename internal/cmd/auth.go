@@ -13,9 +13,20 @@ var authCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authenticate with Spotify via browser",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
-		if err != nil {
-			return err
+		clientID, _ := cmd.Flags().GetString("client-id")
+
+		var cfg *config.Config
+		if clientID != "" {
+			cfg = &config.Config{ClientID: clientID}
+			if err := config.Save(cfg); err != nil {
+				return fmt.Errorf("saving config: %w", err)
+			}
+		} else {
+			var err error
+			cfg, err = config.Load()
+			if err != nil {
+				return err
+			}
 		}
 
 		verifier, err := auth.GenerateVerifier()
@@ -56,4 +67,8 @@ var authCmd = &cobra.Command{
 		fmt.Println("Authentication successful! Token saved.")
 		return nil
 	},
+}
+
+func init() {
+	authCmd.Flags().String("client-id", "", "Spotify app client ID (only needed on first run)")
 }
