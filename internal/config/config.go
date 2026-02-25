@@ -28,7 +28,7 @@ func Load() (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, errors.New("not configured — create an app at https://developer.spotify.com/dashboard and run: spotify auth <your_client_id>")
+			return nil, errors.New("not configured — create an app at https://developer.spotify.com/dashboard (redirect URI: http://127.0.0.1:8888/callback) then run: spotify auth <your_client_id>")
 		}
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
 	if cfg.ClientID == "" {
-		return nil, errors.New("client_id missing from config — create an app at https://developer.spotify.com/dashboard and run: spotify auth <your_client_id>")
+		return nil, errors.New("client_id missing from config — create an app at https://developer.spotify.com/dashboard (redirect URI: http://127.0.0.1:8888/callback) then run: spotify auth <your_client_id>")
 	}
 	return &cfg, nil
 }
