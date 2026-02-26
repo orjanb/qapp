@@ -19,7 +19,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "spotify",
+	Use:   "qapp",
 	Short: "A CLI for interacting with Spotify",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Name() == "auth" {
@@ -60,7 +60,7 @@ func initClient(ctx context.Context) error {
 	token, err := auth.LoadToken()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("not authenticated — run `spotify auth` first (see https://developer.spotify.com/documentation/web-api/concepts/apps)")
+			return fmt.Errorf("not authenticated — run `qapp auth` first (see https://developer.spotify.com/documentation/web-api/concepts/apps)")
 		}
 		return fmt.Errorf("loading token: %w", err)
 	}
