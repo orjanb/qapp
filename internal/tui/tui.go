@@ -3,8 +3,10 @@ package tui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -64,6 +66,8 @@ type nowPlayingMsg struct {
 	err  error
 }
 
+type tickMsg time.Time
+
 // ── styling ──────────────────────────────────────────────────────────────────
 
 var (
@@ -89,6 +93,9 @@ type Model struct {
 	windowWidth  int
 	windowHeight int
 	nowPlaying   *spotify.CurrentlyPlayingResponse
+	progressBar  progress.Model
+	progressMs   int
+	tickCount    int
 }
 
 func New(client *spotify.Client, ctx context.Context) Model {
@@ -112,6 +119,8 @@ func New(client *spotify.Client, ctx context.Context) Model {
 	ql.SetFilteringEnabled(false)
 	ql.DisableQuitKeybindings()
 
+	pb := progress.New(progress.WithDefaultGradient())
+
 	return Model{
 		client:      client,
 		ctx:         ctx,
@@ -119,11 +128,12 @@ func New(client *spotify.Client, ctx context.Context) Model {
 		input:       ti,
 		resultsList: rl,
 		queueList:   ql,
+		progressBar: pb,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, doLoadNowPlaying(m.client, m.ctx))
+	return tea.Batch(textinput.Blink, doLoadNowPlaying(m.client, m.ctx), doTick())
 }
 
 // ── update ───────────────────────────────────────────────────────────────────
@@ -138,6 +148,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resultsList.SetSize(msg.Width-2, listHeight)
 		m.queueList.SetSize(msg.Width-2, listHeight)
 		m.input.Width = msg.Width - 4
+		m.progressBar.Width = (msg.Width - 4) / 4
 		return m, nil
 
 	case searchResultsMsg:
@@ -197,9 +208,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusIsErr = false
 		return m, tea.Batch(doLoadQueue(m.client, m.ctx), doLoadNowPlaying(m.client, m.ctx))
 
+	case tickMsg:
+		m.tickCount++
+		if m.nowPlaying != nil && m.nowPlaying.IsPlaying {
+			m.progressMs += 1000
+		}
+		var cmd tea.Cmd
+		if m.tickCount%10 == 0 {
+			cmd = tea.Batch(doTick(), doLoadNowPlaying(m.client, m.ctx))
+		} else {
+			cmd = doTick()
+		}
+		return m, cmd
+
 	case nowPlayingMsg:
 		if msg.err == nil {
 			m.nowPlaying = msg.resp
+			if msg.resp != nil {
+				m.progressMs = msg.resp.ProgressMs
+			}
 		}
 		return m, nil
 
@@ -304,9 +331,25 @@ func (m Model) nowPlayingView() string {
 	if m.nowPlaying.IsPlaying {
 		symbol = "▶"
 	}
-	line1 := titleStyle.Render(symbol+"  "+m.nowPlaying.Item.Name)
+	line1 := titleStyle.Render(symbol + "  " + m.nowPlaying.Item.Name)
 	line2 := helpStyle.Render("   " + spotify.ArtistNames(*m.nowPlaying.Item) + " · " + m.nowPlaying.Item.Album.Name)
-	return line1 + "\n" + line2
+
+	var pct float64
+	if d := m.nowPlaying.Item.DurationMs; d > 0 {
+		pct = float64(m.progressMs) / float64(d)
+		if pct > 1.0 {
+			pct = 1.0
+		}
+	}
+	bar := m.progressBar.ViewAs(pct)
+	timeStr := helpStyle.Render(fmt.Sprintf(" %s / %s", formatDuration(m.progressMs), formatDuration(m.nowPlaying.Item.DurationMs)))
+
+	return lipgloss.JoinHorizontal(lipgloss.Center, line1, "  ", bar, timeStr) + "\n" + line2
+}
+
+func formatDuration(ms int) string {
+	s := ms / 1000
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }
 
 // ── view ─────────────────────────────────────────────────────────────────────
@@ -327,7 +370,7 @@ func (m Model) View() string {
 	case viewResults:
 		body = m.resultsList.View()
 	case viewQueue:
-		body = m.queueList.View()
+		body = "\n" + m.nowPlayingView() + "\n\n" + m.queueList.View()
 	}
 
 	var statusLine string
@@ -398,4 +441,10 @@ func doLoadNowPlaying(client *spotify.Client, ctx context.Context) tea.Cmd {
 		resp, err := client.GetCurrentlyPlaying(ctx)
 		return nowPlayingMsg{resp: resp, err: err}
 	}
+}
+
+func doTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }

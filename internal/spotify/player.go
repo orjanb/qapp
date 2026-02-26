@@ -19,8 +19,9 @@ func (c *Client) GetQueue(ctx context.Context) (*QueueResponse, error) {
 }
 
 type CurrentlyPlayingResponse struct {
-	IsPlaying bool   `json:"is_playing"`
-	Item      *Track `json:"item"`
+	IsPlaying  bool   `json:"is_playing"`
+	ProgressMs int    `json:"progress_ms"`
+	Item       *Track `json:"item"`
 }
 
 func (c *Client) SkipToNext(ctx context.Context) error {
