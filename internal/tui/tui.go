@@ -215,6 +215,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case viewSearch:
 		switch msg.Type {
+		case tea.KeyCtrlC:
+			return m, tea.Quit
 		case tea.KeyEnter:
 			query := m.input.Value()
 			if query == "" {
@@ -352,7 +354,7 @@ func (m Model) View() string {
 func (m Model) helpText() string {
 	switch m.currentView {
 	case viewSearch:
-		return "enter: search  •  tab: queue"
+		return "enter: search  •  tab: queue  •  ctrl+c: quit"
 	case viewResults:
 		return "enter: add to queue  •  /: search  •  tab: queue  •  q: quit"
 	case viewQueue:
