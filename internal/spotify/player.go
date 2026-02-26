@@ -29,7 +29,7 @@ func (c *Client) SkipToNext(ctx context.Context) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != 204 && resp.StatusCode != 200 {
 		return fmt.Errorf("spotify API error: %s", resp.Status)
 	}
 	return nil
