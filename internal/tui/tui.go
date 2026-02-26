@@ -215,7 +215,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case viewSearch:
 		switch msg.Type {
-		case tea.KeyCtrlC:
+		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyEnter:
 			query := m.input.Value()
@@ -239,7 +239,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case viewResults:
 		switch {
-		case msg.String() == "q":
+		case msg.Type == tea.KeyCtrlC || msg.Type == tea.KeyEsc:
 			return m, tea.Quit
 		case msg.Type == tea.KeyEnter:
 			selected, ok := m.resultsList.SelectedItem().(trackItem)
@@ -249,7 +249,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("Adding %q...", selected.track.Name)
 			m.statusIsErr = false
 			return m, doAddToQueue(m.client, m.ctx, selected.track)
-		case msg.String() == "/" || msg.Type == tea.KeyEsc:
+		case msg.String() == "/":
 			m.currentView = viewSearch
 			m.input.Focus()
 			return m, tea.Batch(textinput.Blink, doLoadNowPlaying(m.client, m.ctx))
@@ -267,7 +267,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case viewQueue:
 		switch {
-		case msg.String() == "q":
+		case msg.Type == tea.KeyCtrlC || msg.Type == tea.KeyEsc:
 			return m, tea.Quit
 		case msg.String() == "n":
 			m.status = "Skipping…"
@@ -277,7 +277,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status = "Refreshing…"
 			m.statusIsErr = false
 			return m, doLoadQueue(m.client, m.ctx)
-		case msg.Type == tea.KeyTab || msg.Type == tea.KeyEsc:
+		case msg.Type == tea.KeyTab:
 			m.currentView = m.prevView
 			if m.prevView == viewSearch {
 				m.input.Focus()
@@ -354,11 +354,11 @@ func (m Model) View() string {
 func (m Model) helpText() string {
 	switch m.currentView {
 	case viewSearch:
-		return "enter: search  •  tab: queue  •  ctrl+c: quit"
+		return "enter: search  •  tab: queue  •  esc/ctrl+c: quit"
 	case viewResults:
-		return "enter: add to queue  •  /: search  •  tab: queue  •  q: quit"
+		return "enter: add to queue  •  /: search  •  tab: queue  •  esc/ctrl+c: quit"
 	case viewQueue:
-		return "n: skip  •  r: refresh  •  tab/esc: back  •  q: quit"
+		return "n: skip  •  r: refresh  •  tab: back  •  esc/ctrl+c: quit"
 	}
 	return ""
 }
