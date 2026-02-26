@@ -14,7 +14,7 @@ func tokenPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "spotify-cli", "token.json"), nil
+	return filepath.Join(home, ".config", "qapp-cli", "token.json"), nil
 }
 
 func SaveToken(token *oauth2.Token) error {

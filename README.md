@@ -16,7 +16,7 @@ A terminal client for Spotify. Includes an interactive TUI and a handful of CLI 
 qapp auth <client-id>
 ```
 
-This opens a browser for the OAuth flow and saves the token to `~/.config/spotify-cli/token.json`. The client ID is saved to `~/.config/spotify-cli/config.json` — you only need to pass it once.
+This opens a browser for the OAuth flow and saves the token to `~/.config/qapp-cli/token.json`. The client ID is saved to `~/.config/qapp-cli/config.json` — you only need to pass it once.
 
 Re-run `qapp auth` (without arguments) any time you need to refresh your token.
 

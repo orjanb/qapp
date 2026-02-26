@@ -17,7 +17,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "spotify-cli", "config.json"), nil
+	return filepath.Join(home, ".config", "qapp-cli", "config.json"), nil
 }
 
 func Load() (*Config, error) {
