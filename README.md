@@ -51,16 +51,17 @@ Launches the interactive TUI.
 | Search | type | fill search input |
 | Search | enter | search |
 | Search | tab | open queue |
+| Search | esc / ctrl+c | quit |
 | Results | ↑ ↓ | navigate |
 | Results | enter | add to queue |
-| Results | / or esc | back to search |
+| Results | / | back to search |
 | Results | tab | open queue |
-| Results | q | quit |
+| Results | esc / ctrl+c | quit |
 | Queue | ↑ ↓ | navigate |
 | Queue | n | skip to next track |
 | Queue | r | refresh |
-| Queue | tab / esc | back |
-| Queue | q | quit |
+| Queue | tab | back |
+| Queue | esc / ctrl+c | quit |
 
 ### CLI commands
 
