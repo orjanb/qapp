@@ -12,7 +12,7 @@ A terminal client for Spotify. Includes an interactive TUI and a handful of CLI 
 
 ### 2. Build
 
-Requires [Go](https://go.dev) 1.21+.
+Requires [Go](https://go.dev) 1.25+.
 
 ```sh
 go build -o qapp ./cmd/qapp/
