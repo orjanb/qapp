@@ -92,10 +92,11 @@ type Model struct {
 	statusIsErr  bool
 	windowWidth  int
 	windowHeight int
-	nowPlaying   *spotify.CurrentlyPlayingResponse
-	progressBar  progress.Model
-	progressMs   int
-	tickCount    int
+	nowPlaying    *spotify.CurrentlyPlayingResponse
+	progressBar   progress.Model
+	progressMs    int
+	tickCount     int
+	lastTrackID   string
 }
 
 func New(client *spotify.Client, ctx context.Context) Model {
@@ -206,12 +207,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.status = "Skipped"
 		m.statusIsErr = false
-		return m, tea.Batch(doLoadQueue(m.client, m.ctx), doLoadNowPlaying(m.client, m.ctx))
+		return m, doLoadNowPlaying(m.client, m.ctx)
 
 	case tickMsg:
 		m.tickCount++
 		if m.nowPlaying != nil && m.nowPlaying.IsPlaying {
 			m.progressMs += 1000
+			d := m.nowPlaying.Item.DurationMs
+			if d > 0 && m.progressMs >= d {
+				return m, tea.Batch(doTick(), doLoadNowPlaying(m.client, m.ctx))
+			}
 		}
 		var cmd tea.Cmd
 		if m.tickCount%10 == 0 {
@@ -226,6 +231,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.nowPlaying = msg.resp
 			if msg.resp != nil {
 				m.progressMs = msg.resp.ProgressMs
+				if msg.resp.Item.ID != m.lastTrackID {
+					m.lastTrackID = msg.resp.Item.ID
+					return m, doLoadQueue(m.client, m.ctx)
+				}
 			}
 		}
 		return m, nil
