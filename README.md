@@ -10,17 +10,7 @@ A terminal client for Spotify. Includes an interactive TUI and a handful of CLI 
 2. In the app settings, add `http://127.0.0.1:8888/callback` as a Redirect URI
 3. Copy your Client ID
 
-### 2. Authenticate
-
-```sh
-qapp auth <client-id>
-```
-
-This opens a browser for the OAuth flow and saves the token to `~/.config/qapp-cli/token.json`. The client ID is saved to `~/.config/qapp-cli/config.json` — you only need to pass it once.
-
-Re-run `qapp auth` (without arguments) any time you need to refresh your token.
-
-### 3. Build
+### 2. Build
 
 Requires [Go](https://go.dev) 1.21+.
 
@@ -35,6 +25,16 @@ GOOS=windows GOARCH=amd64 go build -o qapp.exe ./cmd/qapp/
 ```
 
 On Windows, set the environment and run from [Windows Terminal](https://aka.ms/terminal).
+
+### 3. Authenticate
+
+```sh
+qapp auth <client-id>
+```
+
+This opens a browser for the OAuth flow and saves the token to `~/.config/qapp-cli/token.json`. The client ID is saved to `~/.config/qapp-cli/config.json` — you only need to pass it once.
+
+Re-run `qapp auth` (without arguments) any time you need to refresh your token.
 
 ## Usage
 
