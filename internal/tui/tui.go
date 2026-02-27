@@ -145,7 +145,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.windowWidth = msg.Width
 		m.windowHeight = msg.Height
-		listHeight := msg.Height - 5
+		listHeight := msg.Height - 9
 		m.resultsList.SetSize(msg.Width-2, listHeight)
 		m.queueList.SetSize(msg.Width-2, listHeight)
 		m.input.Width = msg.Width - 4
@@ -377,7 +377,7 @@ func (m Model) View() string {
 	case viewSearch:
 		body = "\n" + m.nowPlayingView() + "\n\n  " + m.input.View()
 	case viewResults:
-		body = m.resultsList.View()
+		body = "\n" + m.nowPlayingView() + "\n\n" + m.resultsList.View()
 	case viewQueue:
 		body = "\n" + m.nowPlayingView() + "\n\n" + m.queueList.View()
 	}
