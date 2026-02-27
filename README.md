@@ -18,13 +18,19 @@ Requires [Go](https://go.dev) 1.21+.
 go build -o qapp ./cmd/qapp/
 ```
 
-**Cross-compile for Windows:**
+**Cross-compile for Windows (from macOS/Linux):**
 
 ```sh
 GOOS=windows GOARCH=amd64 go build -o qapp.exe ./cmd/qapp/
 ```
 
-On Windows, set the environment and run from [Windows Terminal](https://aka.ms/terminal).
+**Build on Windows (PowerShell):**
+
+```powershell
+go build -o qapp.exe ./cmd/qapp/
+```
+
+Run from [Windows Terminal](https://aka.ms/terminal) for ANSI support.
 
 ### 3. Authenticate
 
