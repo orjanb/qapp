@@ -18,13 +18,7 @@ Requires [Go](https://go.dev) 1.25+.
 go build -o qapp ./cmd/qapp/
 ```
 
-**Cross-compile for Windows (from macOS/Linux):**
-
-```sh
-GOOS=windows GOARCH=amd64 go build -o qapp.exe ./cmd/qapp/
-```
-
-**Build on Windows (PowerShell):**
+**On Windows (PowerShell):**
 
 ```powershell
 go build -o qapp.exe ./cmd/qapp/
