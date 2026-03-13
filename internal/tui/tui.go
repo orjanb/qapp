@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/orjan/spotify/internal/lastfm"
 	spotify "github.com/orjan/spotify/internal/spotify"
 )
 
@@ -26,12 +27,21 @@ const (
 // ── list items ───────────────────────────────────────────────────────────────
 
 type trackItem struct {
-	track  spotify.Track
-	prefix string
+	track          spotify.Track
+	prefix         string
+	playCount      *int // nil = not yet loaded
+	playCountFailed bool
 }
 
 func (t trackItem) Title() string {
-	return t.prefix + t.track.Name
+	title := t.prefix + t.track.Name
+	if t.playCountFailed {
+		return fmt.Sprintf("%s  (no play data available)", title)
+	}
+	if t.playCount != nil {
+		return fmt.Sprintf("%s  (%d plays)", title, *t.playCount)
+	}
+	return title
 }
 
 func (t trackItem) Description() string {
@@ -66,6 +76,25 @@ type nowPlayingMsg struct {
 	err  error
 }
 
+type nowPlayingStatsMsg struct {
+	stats *lastfm.TrackStats
+	err   error
+}
+
+type queueItemStatsMsg struct {
+	index   int
+	trackID string
+	stats   *lastfm.TrackStats
+	err     error
+}
+
+type resultItemStatsMsg struct {
+	index   int
+	trackID string
+	stats   *lastfm.TrackStats
+	err     error
+}
+
 type tickMsg time.Time
 
 // ── styling ──────────────────────────────────────────────────────────────────
@@ -81,25 +110,27 @@ var (
 // ── model ────────────────────────────────────────────────────────────────────
 
 type Model struct {
-	client       *spotify.Client
-	ctx          context.Context
-	currentView  view
-	prevView     view
-	input        textinput.Model
-	resultsList  list.Model
-	queueList    list.Model
-	status       string
-	statusIsErr  bool
-	windowWidth  int
-	windowHeight int
-	nowPlaying    *spotify.CurrentlyPlayingResponse
-	progressBar   progress.Model
-	progressMs    int
-	tickCount     int
-	lastTrackID   string
+	client          *spotify.Client
+	lastfm          *lastfm.Client
+	ctx             context.Context
+	currentView     view
+	prevView        view
+	input           textinput.Model
+	resultsList     list.Model
+	queueList       list.Model
+	status          string
+	statusIsErr     bool
+	windowWidth     int
+	windowHeight    int
+	nowPlaying      *spotify.CurrentlyPlayingResponse
+	nowPlayingStats *lastfm.TrackStats
+	progressBar     progress.Model
+	progressMs      int
+	tickCount       int
+	lastTrackID     string
 }
 
-func New(client *spotify.Client, ctx context.Context) Model {
+func New(client *spotify.Client, lfm *lastfm.Client, ctx context.Context) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Search for a track…"
 	ti.Focus()
@@ -124,6 +155,7 @@ func New(client *spotify.Client, ctx context.Context) Model {
 
 	return Model{
 		client:      client,
+		lastfm:      lfm,
 		ctx:         ctx,
 		currentView: viewSearch,
 		input:       ti,
@@ -145,7 +177,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.windowWidth = msg.Width
 		m.windowHeight = msg.Height
-		listHeight := msg.Height - 9
+		overhead := 9
+		if m.lastfm != nil {
+			overhead = 10
+		}
+		listHeight := msg.Height - overhead
 		m.resultsList.SetSize(msg.Width-2, listHeight)
 		m.queueList.SetSize(msg.Width-2, listHeight)
 		m.input.Width = msg.Width - 4
@@ -166,6 +202,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentView = viewResults
 		m.status = fmt.Sprintf("%d results", len(msg.tracks))
 		m.statusIsErr = false
+		if m.lastfm != nil {
+			var cmds []tea.Cmd
+			for i, t := range msg.tracks {
+				cmds = append(cmds, doLoadResultItemStats(m.lastfm, m.ctx, i, t))
+			}
+			return m, tea.Batch(cmds...)
+		}
 		return m, nil
 
 	case queueLoadedMsg:
@@ -187,6 +230,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.queueList.SetItems(items)
 		m.status = fmt.Sprintf("%d items in queue", len(items))
 		m.statusIsErr = false
+		if m.lastfm != nil {
+			var cmds []tea.Cmd
+			for i, item := range items {
+				ti := item.(trackItem)
+				cmds = append(cmds, doLoadQueueItemStats(m.lastfm, m.ctx, i, ti.track))
+			}
+			return m, tea.Batch(cmds...)
+		}
 		return m, nil
 
 	case addedToQueueMsg:
@@ -233,10 +284,69 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.progressMs = msg.resp.ProgressMs
 				if msg.resp.Item.ID != m.lastTrackID {
 					m.lastTrackID = msg.resp.Item.ID
-					return m, doLoadQueue(m.client, m.ctx)
+					m.nowPlayingStats = nil
+					cmds := []tea.Cmd{doLoadQueue(m.client, m.ctx)}
+					if m.lastfm != nil {
+						cmds = append(cmds, doLoadNowPlayingStats(m.lastfm, m.ctx, *msg.resp.Item))
+					}
+					return m, tea.Batch(cmds...)
 				}
 			}
 		}
+		return m, nil
+
+	case nowPlayingStatsMsg:
+		if msg.err == nil {
+			m.nowPlayingStats = msg.stats
+		}
+		return m, nil
+
+	case queueItemStatsMsg:
+		if msg.err != nil || msg.stats == nil {
+			items := m.queueList.Items()
+			if msg.index < len(items) {
+				if ti, ok := items[msg.index].(trackItem); ok && ti.track.ID == msg.trackID {
+					ti.playCountFailed = true
+					m.queueList.SetItem(msg.index, ti)
+				}
+			}
+			return m, nil
+		}
+		items := m.queueList.Items()
+		if msg.index >= len(items) {
+			return m, nil
+		}
+		ti, ok := items[msg.index].(trackItem)
+		if !ok || ti.track.ID != msg.trackID {
+			return m, nil
+		}
+		count := msg.stats.UserPlayCount
+		ti.playCount = &count
+		m.queueList.SetItem(msg.index, ti)
+		return m, nil
+
+	case resultItemStatsMsg:
+		if msg.err != nil || msg.stats == nil {
+			items := m.resultsList.Items()
+			if msg.index < len(items) {
+				if ti, ok := items[msg.index].(trackItem); ok && ti.track.ID == msg.trackID {
+					ti.playCountFailed = true
+					m.resultsList.SetItem(msg.index, ti)
+				}
+			}
+			return m, nil
+		}
+		items := m.resultsList.Items()
+		if msg.index >= len(items) {
+			return m, nil
+		}
+		ti, ok := items[msg.index].(trackItem)
+		if !ok || ti.track.ID != msg.trackID {
+			return m, nil
+		}
+		count := msg.stats.UserPlayCount
+		ti.playCount = &count
+		m.resultsList.SetItem(msg.index, ti)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -353,7 +463,16 @@ func (m Model) nowPlayingView() string {
 	bar := m.progressBar.ViewAs(pct)
 	timeStr := helpStyle.Render(fmt.Sprintf(" %s / %s", formatDuration(m.progressMs), formatDuration(m.nowPlaying.Item.DurationMs)))
 
-	return lipgloss.JoinHorizontal(lipgloss.Center, line1, "  ", bar, timeStr) + "\n" + line2
+	line1line2 := lipgloss.JoinHorizontal(lipgloss.Center, line1, "  ", bar, timeStr) + "\n" + line2
+	if m.nowPlayingStats != nil {
+		line3 := helpStyle.Render(fmt.Sprintf(
+			"   ♪ %d plays  •  %d listeners",
+			m.nowPlayingStats.UserPlayCount,
+			m.nowPlayingStats.Listeners,
+		))
+		return line1line2 + "\n" + line3
+	}
+	return line1line2
 }
 
 func formatDuration(ms int) string {
@@ -456,4 +575,34 @@ func doTick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
+}
+
+func doLoadNowPlayingStats(lfm *lastfm.Client, ctx context.Context, track spotify.Track) tea.Cmd {
+	return func() tea.Msg {
+		if len(track.Artists) == 0 {
+			return nowPlayingStatsMsg{err: fmt.Errorf("no artists")}
+		}
+		stats, err := lfm.GetTrackInfo(ctx, track.Artists[0].Name, track.Name)
+		return nowPlayingStatsMsg{stats: stats, err: err}
+	}
+}
+
+func doLoadQueueItemStats(lfm *lastfm.Client, ctx context.Context, index int, track spotify.Track) tea.Cmd {
+	return func() tea.Msg {
+		if len(track.Artists) == 0 {
+			return queueItemStatsMsg{index: index, trackID: track.ID, err: fmt.Errorf("no artists")}
+		}
+		stats, err := lfm.GetTrackInfo(ctx, track.Artists[0].Name, track.Name)
+		return queueItemStatsMsg{index: index, trackID: track.ID, stats: stats, err: err}
+	}
+}
+
+func doLoadResultItemStats(lfm *lastfm.Client, ctx context.Context, index int, track spotify.Track) tea.Cmd {
+	return func() tea.Msg {
+		if len(track.Artists) == 0 {
+			return resultItemStatsMsg{index: index, trackID: track.ID, err: fmt.Errorf("no artists")}
+		}
+		stats, err := lfm.GetTrackInfo(ctx, track.Artists[0].Name, track.Name)
+		return resultItemStatsMsg{index: index, trackID: track.ID, stats: stats, err: err}
+	}
 }
