@@ -44,7 +44,11 @@ Re-run `qapp auth` (without arguments) any time you need to refresh your token.
 qapp
 ```
 
-Launches the interactive TUI.
+Launches the interactive TUI. Optionally, pass your [Last.fm](https://www.last.fm/api/account/create) credentials to show play counts and listener stats:
+
+```sh
+qapp --lastfm-user <username> --lastfm-api-key <api-key>
+```
 
 | View | Key | Action |
 |------|-----|--------|
