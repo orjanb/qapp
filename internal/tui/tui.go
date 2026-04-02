@@ -72,7 +72,7 @@ type skippedToNextMsg struct {
 }
 
 type nowPlayingMsg struct {
-	resp *spotify.CurrentlyPlayingResponse
+	resp *spotify.PlaybackStateResponse
 	err  error
 }
 
@@ -122,7 +122,7 @@ type Model struct {
 	statusIsErr     bool
 	windowWidth     int
 	windowHeight    int
-	nowPlaying      *spotify.CurrentlyPlayingResponse
+	nowPlaying      *spotify.PlaybackStateResponse
 	nowPlayingStats *lastfm.TrackStats
 	progressBar     progress.Model
 	progressMs      int
@@ -218,12 +218,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		var items []list.Item
-		if msg.resp.CurrentlyPlaying != nil {
-			items = append(items, trackItem{
-				track:  *msg.resp.CurrentlyPlaying,
-				prefix: "▶ ",
-			})
-		}
 		for _, t := range msg.resp.Queue {
 			items = append(items, trackItem{track: t})
 		}
@@ -566,7 +560,7 @@ func doSkipToNext(client *spotify.Client, ctx context.Context) tea.Cmd {
 
 func doLoadNowPlaying(client *spotify.Client, ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := client.GetCurrentlyPlaying(ctx)
+		resp, err := client.GetPlaybackState(ctx)
 		return nowPlayingMsg{resp: resp, err: err}
 	}
 }

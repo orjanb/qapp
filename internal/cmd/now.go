@@ -11,7 +11,7 @@ var nowCmd = &cobra.Command{
 	Use:   "now",
 	Short: "Show the currently playing track",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := spotifyClient.GetCurrentlyPlaying(cmd.Context())
+		result, err := spotifyClient.GetPlaybackState(cmd.Context())
 		if err != nil {
 			return err
 		}

@@ -47,3 +47,14 @@ func (c *Client) postEmpty(ctx context.Context, path string) (*http.Response, er
 	req.Header.Set("Content-Length", "0")
 	return c.http.Do(req)
 }
+
+func (c *Client) put(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+path, body)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return c.http.Do(req)
+}

@@ -1,7 +1,9 @@
 package spotify
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -18,10 +20,11 @@ func (c *Client) GetQueue(ctx context.Context) (*QueueResponse, error) {
 	return &result, nil
 }
 
-type CurrentlyPlayingResponse struct {
-	IsPlaying  bool   `json:"is_playing"`
-	ProgressMs int    `json:"progress_ms"`
-	Item       *Track `json:"item"`
+type PlaybackStateResponse struct {
+	IsPlaying  bool    `json:"is_playing"`
+	ProgressMs int     `json:"progress_ms"`
+	Item       *Track  `json:"item"`
+	Device     Device  `json:"device"`
 }
 
 func (c *Client) SkipToNext(ctx context.Context) error {
@@ -36,10 +39,26 @@ func (c *Client) SkipToNext(ctx context.Context) error {
 	return nil
 }
 
-// GetCurrentlyPlaying returns what's playing now, or nil if nothing is playing.
-func (c *Client) GetCurrentlyPlaying(ctx context.Context) (*CurrentlyPlayingResponse, error) {
-	var result CurrentlyPlayingResponse
-	if err := c.get(ctx, "/me/player/currently-playing", &result); err != nil {
+// TransferPlayback transfers playback to the given device.
+func (c *Client) TransferPlayback(ctx context.Context, deviceID string) error {
+	body, _ := json.Marshal(map[string]any{
+		"device_ids": []string{deviceID},
+	})
+	resp, err := c.put(ctx, "/me/player", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 204 && resp.StatusCode != 200 {
+		return fmt.Errorf("spotify API error: %s", resp.Status)
+	}
+	return nil
+}
+
+// GetPlaybackState returns the full playback state including device info, or nil if nothing is playing.
+func (c *Client) GetPlaybackState(ctx context.Context) (*PlaybackStateResponse, error) {
+	var result PlaybackStateResponse
+	if err := c.get(ctx, "/me/player", &result); err != nil {
 		return nil, err
 	}
 	if result.Item == nil {
